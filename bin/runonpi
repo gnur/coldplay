@@ -1,0 +1,7 @@
+#!/bin/bash
+
+GOOS=linux GOARCH=arm go build -o coldplay .
+
+scp coldplay venus:/home/erwin/coldplay
+
+ssh venus "chmod +x coldplay && /home/erwin/coldplay"
