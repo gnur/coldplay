@@ -75,10 +75,8 @@ impl Sonar {
 }
 
 fn main() {
-    println!("Hello, world!");
-
     let mut so = Sonar::new().unwrap();
     let dist = so.get_distance();
 
-    println!("{} cm", dist);
+    println!("{:.2} cm", dist);
 }
