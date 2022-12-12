@@ -6,4 +6,5 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-rppal = "0.14.1"
+i2cdev = "0.5.1"
+nats = "0.23.1"

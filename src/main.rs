@@ -1,82 +1,73 @@
-use rppal::gpio::{Gpio, InputPin, OutputPin};
 use std::thread;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
-const GPIO_TRIG: u8 = 14;
-const GPIO_ECHO: u8 = 15;
+use i2cdev::core::*;
+use i2cdev::linux::{LinuxI2CDevice, LinuxI2CError};
 
-const SONIC_SPEED: f64 = 0.034; // cm/micro second
-pub struct Sonar {
-    trig: OutputPin,
-    echo: InputPin,
-}
+const TFLUNA_ADDR: u16 = 0x10;
 
-impl Sonar {
-    pub fn new() -> Option<Sonar> {
-        let gpio = match Gpio::new() {
-            Ok(gpio) => gpio,
-            Err(e) => {
-                println!("{:?}", e);
-                return None;
-            }
-        };
-        let trig = match gpio.get(GPIO_TRIG) {
-            Ok(pin) => {
-                let output = pin.into_output();
-                output
-            }
-            Err(e) => {
-                println!("{:?}", e);
-                return None;
-            }
-        };
-        let echo = match gpio.get(GPIO_ECHO) {
-            Ok(pin) => {
-                let input = pin.into_input();
-                input
-            }
-            Err(e) => {
-                println!("{:?}", e);
-                return None;
-            }
-        };
-        Some(Sonar { echo, trig })
-    }
-    /// Returns a distance sample.
-    /// Will return -1 if something was a foot
-    pub fn get_distance(&mut self) -> f64 {
-        self.trig.set_low();
-        thread::sleep(Duration::from_micros(2));
-        self.trig.set_high();
-        thread::sleep(Duration::from_micros(10));
-        self.trig.set_low();
-        let mut init = Instant::now();
-        let mut start = Instant::now();
-        let mut duration = Duration::new(0, 0);
-        while self.echo.is_low() {
-            start = Instant::now();
-            if init.elapsed().as_millis() > 30 {
-                println!("is_low: {}", init.elapsed().as_millis());
-                return -1.0;
+const MODE_ADDR: u8 = 0x23;
+const TRIGGER_MODE: [u8; 1] = [0x01];
+
+const TRIGGER_ADDR: u8 = 0x24;
+
+const SAMPLES: u8 = 100;
+
+fn i2cfun() -> Result<(), LinuxI2CError> {
+    let mut dev = LinuxI2CDevice::new("/dev/i2c-1", TFLUNA_ADDR)?;
+
+    let nc = nats::connect("uranus")?;
+    nc.publish("coldplay.connection", "connecting")?;
+
+    //set up the TF Luna to only measure when asked for enhanced accuracy
+    dev.smbus_write_block_data(MODE_ADDR, &TRIGGER_MODE)?;
+
+    let mut last_measurement = 0.0;
+    loop {
+        let mut sum: f64 = 0.0;
+        let mut reads = 0;
+        //do SAMPLES measurements
+        for _ in 0..SAMPLES {
+            thread::sleep(Duration::from_millis(10));
+
+            dev.smbus_write_block_data(TRIGGER_ADDR, &TRIGGER_MODE)?;
+
+            thread::sleep(Duration::from_millis(10));
+
+            let read = dev.smbus_read_i2c_block_data(0x00, 0x02);
+            match read {
+                Ok(buf) => {
+                    let mut dist: f64 = buf[1] as f64 * 256.0;
+                    dist += buf[0] as f64;
+                    sum += dist;
+                    reads += 1;
+                }
+                Err(e) => println!("Failure: {}", e),
             }
         }
-        init = Instant::now();
-        while self.echo.is_high() {
-            duration = start.elapsed();
-            if init.elapsed().as_millis() > 30 {
-                println!("is_high: {}", init.elapsed().as_millis());
-                return -1.0;
-            }
+        //a measurement failed, discard this result
+        if reads != SAMPLES {
+            continue;
         }
-        let micros = duration.as_micros();
-        let distance = (SONIC_SPEED * micros as f64) / 2.0;
-        return distance;
+
+        let avg: f64 = sum / reads as f64;
+        let diff = avg - last_measurement;
+
+        if diff.abs() > 0.25 {
+            println!("We're moving!");
+            //push to nats
+        }
+        last_measurement = avg;
+
+        println!("avg: {avg}");
     }
+    nc.publish("coldplay.venus.connection", "disconnecting")?;
 }
 
 fn main() {
-    let mut so = Sonar::new().unwrap();
-    let dist = so.get_distance();
-
-    println!("{:.2} cm", dist);
+    let res = i2cfun();
+    match res {
+        Ok(_) => println!("Done"),
+        Err(err) => println!("Shit: {err}"),
+    }
 }
