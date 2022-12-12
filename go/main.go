@@ -2,29 +2,23 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
-	"log"
 	"os"
 	"time"
 
+	"github.com/nats-io/nats.go"
+
 	influxdb2 "github.com/influxdata/influxdb-client-go/v2"
 	"github.com/influxdata/influxdb-client-go/v2/api/write"
-
-	"github.com/stianeikeland/go-rpio/v4"
 )
 
+type Measurement struct {
+	Height    float64
+	Timestamp time.Time
+}
+
 func main() {
-
-	dist := read()
-	fmt.Println("Distance:", dist)
-}
-
-func print(s string) {
-	fmt.Println(time.Now().UnixMicro(), s)
-}
-
-
-func writeToInflux() {
 	token := os.Getenv("INFLUXDB_TOKEN")
 	url := "http://uranus:8086"
 	client := influxdb2.NewClient(url, token)
@@ -32,19 +26,37 @@ func writeToInflux() {
 	org := "gnur"
 	bucket := "coldplay"
 	writeAPI := client.WriteAPIBlocking(org, bucket)
-	for value := 0; value < 5; value++ {
-		tags := map[string]string{
-			"tagname1": "tagvalue1",
-		}
-		fields := map[string]interface{}{
-			"field1": value,
-		}
-		point := write.NewPoint("measurement1", tags, fields, time.Now())
-		fmt.Println("Writing: %i", value)
 
-		if err := writeAPI.WritePoint(context.Background(), point); err != nil {
-			log.Fatal(err)
-		}
-		time.Sleep(1 * time.Second) // separate points by 1 second
+	nc, err := nats.Connect("uranus")
+	if err != nil {
+		fmt.Println(err)
+		return
 	}
+
+	nc.Subscribe("coldplay.measurement", func(m *nats.Msg) {
+		var point Measurement
+		err := json.Unmarshal(m.Data, &point)
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
+
+		fmt.Printf("Received a measurement: %f \n", point.Height)
+
+		tags := map[string]string{}
+		fields := map[string]interface{}{
+			"height": point.Height,
+		}
+
+		influxPoint := write.NewPoint("measurement1", tags, fields, point.Timestamp)
+
+		if err := writeAPI.WritePoint(context.Background(), influxPoint); err != nil {
+			fmt.Println(err)
+			return
+		}
+	})
+
+	wait := make(chan bool)
+	<-wait
+
 }
