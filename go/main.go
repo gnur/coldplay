@@ -43,7 +43,9 @@ func main() {
 
 		fmt.Printf("Received a measurement: %f \n", point.Height)
 
-		tags := map[string]string{}
+		tags := map[string]string{
+			"object": "elevator",
+		}
 		fields := map[string]interface{}{
 			"height": point.Height,
 		}
