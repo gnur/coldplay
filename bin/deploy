@@ -1,0 +1,11 @@
+#!/bin/bash
+
+
+cargo build --release
+
+sudo systemctl stop coldplay
+
+sudo cp target/release/coldplay /usr/local/bin/coldplay 
+
+sudo systemctl start coldplay
+sudo journalctl -u coldplay -f
