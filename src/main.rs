@@ -13,6 +13,10 @@ const TRIGGER_MODE: [u8; 1] = [0x01];
 
 const TRIGGER_ADDR: u8 = 0x24;
 
+const GROUND_FLOOR_HEIGHT: f64 = 2.5;
+const FIRST_FLOOR_HEIGHT: f64 = 276.6;
+const TOP_FLOOR_HEIGHT: f64 = 544.0;
+
 const SAMPLES: u8 = 50;
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -32,7 +36,7 @@ fn i2cfun() -> Result<(), LinuxI2CError> {
     //set up the TF Luna to only measure when asked for enhanced accuracy
     dev.smbus_write_block_data(MODE_ADDR, &TRIGGER_MODE)?;
 
-    let mut last_measurement = 0.0;
+    let mut last_measurement = -100.0;
     let mut sleeptime = Duration::from_millis(20);
     let mut moves = 0;
 
@@ -63,8 +67,29 @@ fn i2cfun() -> Result<(), LinuxI2CError> {
             continue;
         }
 
-        let avg: f64 = sum / reads as f64;
+        //average of last SAMPLES reads
+        let mut avg: f64 = 545.0 - (sum / reads as f64);
+
+        if last_measurement == -100.0 {
+            last_measurement = avg;
+        }
+
+        avg = (avg * 2.0 + last_measurement) / 3.0;
+        //flip measurements upside down to let them make a bit more sense and take a moving average
+
         let diff = avg - last_measurement;
+
+        //elevator max observed speed is about +- 5 at this point in the script
+        if diff.abs() > 15.0 {
+            println!("Skipping because init: {diff}");
+            last_measurement = avg;
+            //this should only happen on boot, skip processing until measurements are stable
+            continue;
+        }
+
+        //check if within +- 1 cm of ground floor: 2.5
+        //check if within +- 1 cm of middle floor: 276.6
+        //check if within +- 1 cm of top floor: 544
 
         if diff.abs() > 0.25 {
             moves = 5;
