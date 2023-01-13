@@ -4,30 +4,29 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os"
 	"time"
 
+	"github.com/castai/promwrite"
 	"github.com/nats-io/nats.go"
-
-	influxdb2 "github.com/influxdata/influxdb-client-go/v2"
-	"github.com/influxdata/influxdb-client-go/v2/api/write"
 )
 
 type Measurement struct {
-	Height    float64
-	Timestamp time.Time
+	Height      float64
+	Temperature float64
+	Timestamp   time.Time
 }
 
 func main() {
-	token := os.Getenv("INFLUXDB_TOKEN")
-	url := "http://uranus:8086"
-	client := influxdb2.NewClient(url, token)
 
-	org := "gnur"
-	bucket := "coldplay"
-	writeAPI := client.WriteAPIBlocking(org, bucket)
+	cl := promwrite.NewClient("http://uranus:9090/api/v1/write")
 
 	nc, err := nats.Connect("uranus")
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	loc, err := time.LoadLocation("Local")
 	if err != nil {
 		fmt.Println(err)
 		return
@@ -41,21 +40,49 @@ func main() {
 			return
 		}
 
-		fmt.Printf("Received a measurement: %f \n", point.Height)
+		fmt.Printf("Received a measurement\nheight: %f\ntemperature: %f\n", point.Height, point.Temperature)
+		point.Timestamp = point.Timestamp.In(loc)
 
-		tags := map[string]string{
-			"object": "elevator",
-		}
-		fields := map[string]interface{}{
-			"height": point.Height,
-		}
-
-		influxPoint := write.NewPoint("measurement1", tags, fields, point.Timestamp)
-
-		if err := writeAPI.WritePoint(context.Background(), influxPoint); err != nil {
+		_, err = cl.Write(context.Background(), &promwrite.WriteRequest{
+			TimeSeries: []promwrite.TimeSeries{
+				{
+					Labels: []promwrite.Label{
+						{
+							Name:  "__name__",
+							Value: "object_height",
+						},
+						{
+							Name:  "device",
+							Value: "elevator",
+						},
+					},
+					Sample: promwrite.Sample{
+						Time:  point.Timestamp,
+						Value: point.Height,
+					},
+				},
+				{
+					Labels: []promwrite.Label{
+						{
+							Name:  "__name__",
+							Value: "object_temperature",
+						},
+						{
+							Name:  "device",
+							Value: "luna",
+						},
+					},
+					Sample: promwrite.Sample{
+						Time:  point.Timestamp,
+						Value: point.Temperature,
+					},
+				},
+			},
+		})
+		if err != nil {
 			fmt.Println(err)
-			return
 		}
+
 	})
 
 	wait := make(chan bool)
