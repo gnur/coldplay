@@ -21,10 +21,11 @@ const SAMPLES: u8 = 50;
 
 #[derive(Serialize, Deserialize, Debug)]
 struct Measerement {
-    Height: f64,
+    height: f64,
+    temperature: f64,
 
     #[serde(with = "time::serde::rfc3339")]
-    pub Timestamp: time::OffsetDateTime,
+    pub timestamp: time::OffsetDateTime,
 }
 
 fn i2cfun() -> Result<(), LinuxI2CError> {
@@ -42,6 +43,7 @@ fn i2cfun() -> Result<(), LinuxI2CError> {
 
     loop {
         let mut sum: f64 = 0.0;
+        let mut temperature_sum: f64 = 0.0;
         let mut reads = 0;
         //do SAMPLES measurements
         for _ in 0..SAMPLES {
@@ -51,12 +53,18 @@ fn i2cfun() -> Result<(), LinuxI2CError> {
 
             thread::sleep(sleeptime);
 
-            let read = dev.smbus_read_i2c_block_data(0x00, 0x02);
+            let read = dev.smbus_read_i2c_block_data(0x00, 0x06);
             match read {
                 Ok(buf) => {
                     let mut dist: f64 = buf[1] as f64 * 256.0;
                     dist += buf[0] as f64;
                     sum += dist;
+
+                    let mut temp: f64 = buf[5] as f64 * 256.0;
+                    temp += buf[4] as f64;
+                    temp = temp / 100.0;
+                    temperature_sum += temp;
+
                     reads += 1;
                 }
                 Err(e) => println!("Failure: {}", e),
@@ -66,6 +74,8 @@ fn i2cfun() -> Result<(), LinuxI2CError> {
         if reads != SAMPLES {
             continue;
         }
+
+        let temperature_average: f64 = (temperature_sum / reads as f64);
 
         //average of last SAMPLES reads
         let mut avg: f64 = 545.0 - (sum / reads as f64);
@@ -98,8 +108,9 @@ fn i2cfun() -> Result<(), LinuxI2CError> {
             sleeptime = Duration::from_millis(10);
 
             let p = Measerement {
-                Height: avg,
-                Timestamp: time::OffsetDateTime::now_utc(),
+                height: avg,
+                temperature: temperature_average,
+                timestamp: time::OffsetDateTime::now_utc(),
             };
             let p = serde_json::to_string(&p).unwrap();
             let res = nc.publish("coldplay.measurement", p);
@@ -119,8 +130,9 @@ fn i2cfun() -> Result<(), LinuxI2CError> {
                 moves = 0;
                 //also trigger
                 let p = Measerement {
-                    Height: avg,
-                    Timestamp: time::OffsetDateTime::now_utc(),
+                    height: avg,
+                    temperature: temperature_average,
+                    timestamp: time::OffsetDateTime::now_utc(),
                 };
                 let p = serde_json::to_string(&p).unwrap();
                 let res = nc.publish("coldplay.measurement", p);
