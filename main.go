@@ -9,8 +9,8 @@ import (
 	"time"
 
 	"github.com/castai/promwrite"
-	"github.com/gnur/beep/mp3"
-	"github.com/gnur/beep/speaker"
+	"github.com/faiface/beep/mp3"
+	"github.com/faiface/beep/speaker"
 	"github.com/nats-io/nats.go"
 )
 
