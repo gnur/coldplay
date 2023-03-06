@@ -21,6 +21,17 @@ type Measurement struct {
 }
 
 func main() {
+
+	fmt.Println("Starting")
+
+	_, err := NewMeter()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	fmt.Println("done")
+	return
+
 	f, err := os.Open("music.mp3")
 	if err != nil {
 

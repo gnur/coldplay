@@ -1,5 +1,11 @@
 #!/bin/bash
+#
+function log {
+  echo "$(hostname): $(date +%T)> $*"
+}
 
-sudo systemctl stop coldplay
 
-cargo run
+log "Syncing files to venus"
+rsync -a /Users/erwindekeijzer/code/src/github.com/gnur/coldplay/ venus:/home/erwin/code/coldplay/
+
+ssh venus "/home/erwin/code/coldplay/bin/do-run"
