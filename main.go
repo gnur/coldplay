@@ -30,6 +30,9 @@ func main() {
 	}
 
 	fmt.Println("done")
+
+	select {}
+
 	return
 
 	f, err := os.Open("music.mp3")
