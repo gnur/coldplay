@@ -18,12 +18,15 @@ const (
 	MIDDLE_FLOOR_HEIGHT = 276.5
 	TOP_FLOOR_HEIGHT    = 544
 
-	SAMPLES = 50
+	OFFSET = 544.3
+
+	SAMPLES = 40
 )
 
 type meter struct {
 	samples int
 	dev     *i2c.I2C
+	ch      chan Measurement
 }
 
 func NewMeter() (*meter, error) {
@@ -36,14 +39,14 @@ func NewMeter() (*meter, error) {
 	m := meter{
 		dev:     dev,
 		samples: SAMPLES,
+		ch:      make(chan Measurement),
 	}
 	logger.ChangePackageLogLevel("i2c", logger.InfoLevel)
 
-	d, t, err := m.measure()
+	_, _, err = m.measure()
 	if err != nil {
 		return nil, fmt.Errorf("Failed to do init measure: %w", err)
 	}
-	fmt.Printf("Distance: %v, temp: %v\n", d, t)
 
 	go m.measureLoop()
 
@@ -52,13 +55,14 @@ func NewMeter() (*meter, error) {
 
 func (m *meter) measureLoop() {
 	for {
+		time.Sleep(100 * time.Millisecond)
 
 		var dSum uint = 0
 		var tSum uint = 0
 		samples := 0
 
 		for i := 0; i < m.samples; i++ {
-			time.Sleep(10 * time.Millisecond)
+			time.Sleep(9 * time.Millisecond)
 			d, t, err := m.measure()
 			if err != nil {
 				continue
@@ -76,9 +80,11 @@ func (m *meter) measureLoop() {
 		distance := float64(dSum) / float64(samples)
 		temp := float64(tSum) / float64(samples)
 
-		fmt.Println("Distance: ", distance)
-		fmt.Println("Temperat: ", temp)
-
+		m.ch <- Measurement{
+			Temperature: temp / 100.0,
+			Height:      OFFSET - distance,
+			Timestamp:   time.Now(),
+		}
 	}
 }
 
@@ -88,7 +94,7 @@ func (m *meter) measure() (uint, uint, error) {
 	if err != nil {
 		return 0, 0, fmt.Errorf("Failed to write: %w", err)
 	}
-	time.Sleep(10 * time.Millisecond)
+	time.Sleep(5 * time.Millisecond)
 
 	buf, total, err := m.dev.ReadRegBytes(0x00, 6)
 	if err != nil {
