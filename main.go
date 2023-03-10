@@ -1,9 +1,10 @@
 package main
 
 import (
-	"fmt"
-	"log"
+	"math"
 	"time"
+
+	"github.com/sirupsen/logrus"
 )
 
 type Measurement struct {
@@ -15,68 +16,114 @@ type Measurement struct {
 type coldplay struct {
 	meter  *meter
 	writer *writer
+	player *player
+	ll     *logrus.Entry
 }
 
 func main() {
 
-	fmt.Println("Starting")
+	logrus.Info("Starting")
 
 	m, err := NewMeter()
 	if err != nil {
-		log.Fatal(err)
+		logrus.WithError(err).Fatal("Failed to create meter")
 	}
 
 	w, err := NewWriter()
 	if err != nil {
-		log.Fatal(err)
+		logrus.WithError(err).Fatal("Failed to create writer")
 	}
+
+	logrus.Info("Loading player")
+	p, err := newPlayer()
+	if err != nil {
+		logrus.WithError(err).Fatal("Failed to create player")
+	}
+	logrus.Info("Player loaded, starting")
 
 	cold := coldplay{
 		meter:  m,
 		writer: w,
+		player: p,
+		ll:     logrus.WithField("app", "coldplay"),
 	}
 
-	go cold.brain()
-
-	select {}
-
+	cold.brain()
 }
 
 func (cold *coldplay) brain() {
-	brain := []Measurement{}
-	wasMoving := false
+	history := []Measurement{}
+	lastWrite := time.Now().Add(-5 * time.Minute)
 
 	for point := range cold.meter.ch {
-		brain = append(brain, point)
+		history = append(history, point)
 
-		if len(brain) > 10 {
-			brain = brain[1:]
+		if len(history) > 10 {
+			history = history[1:]
 		}
 
-		if isMoving(brain) && !wasMoving {
-
-			//something changed
-			//music play or music pause
+		if isMoving(history) {
+			cold.ll.WithField("height", point.Height).Info("Writing to prometheus because we're moving")
+			lastWrite = time.Now()
+			cold.writer.ch <- point
+		} else if time.Since(lastWrite) > 30*time.Second {
+			cold.ll.WithField("height", point.Height).Info("Writing to prometheus because it's been too long")
+			lastWrite = time.Now()
+			cold.writer.ch <- point
 		}
 
+		if justChangedMovement(history) {
+			cold.ll.Info("movement changed")
+
+			if isMoving(history) {
+				cold.ll.Info("Starting music")
+				cold.player.start()
+			} else {
+
+				if !isBetweenFloors(history) {
+					cold.ll.Info("stopping music")
+					cold.player.stop()
+				} else {
+					cold.ll.Info("not stopping music because we're between floors")
+				}
+			}
+		}
 	}
 }
 
-func justStarted(points []Measurement) bool {
-	if len(points) < 3 {
+func isBetweenFloors(points []Measurement) bool {
+	cur := points[len(points)-1].Height
+
+	if math.Abs(cur-GROUND_FLOOR_HEIGHT) < 5 {
+		return false
+	}
+
+	if math.Abs(cur-MIDDLE_FLOOR_HEIGHT) < 5 {
+		return false
+	}
+
+	if math.Abs(cur-TOP_FLOOR_HEIGHT) < 5 {
+		return false
+	}
+
+	return true
+
+}
+
+func justChangedMovement(points []Measurement) bool {
+	n := len(points)
+	if n < 3 {
 		//not enough data to check for movement
 		return false
 	}
 
-	n := len(points)
-	old := isMoving(points[n-2 : n-1])
-	cur := isMoving(points[n-1 : n])
+	oldCheck := points[0 : n-1]
+	newCHeck := points[n-2 : n]
 
-	if cur && !old {
-		return true
-	}
+	old := isMoving(oldCheck)
+	cur := isMoving(newCHeck)
 
-	return false
+	return cur != old
 }
 
 func isMoving(points []Measurement) bool {
@@ -93,14 +140,10 @@ func isMoving(points []Measurement) bool {
 
 	speed := distance / time
 
-	if speed > 5 {
+	if math.Abs(speed) > 5 {
 		// moving
 		return true
 	}
-
-	fmt.Println(distance, time)
-
-	//do some fancy calculation to determine current speed
 
 	return false
 }

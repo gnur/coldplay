@@ -31,7 +31,6 @@ type meter struct {
 
 func NewMeter() (*meter, error) {
 
-	fmt.Println("ok")
 	dev, err := i2c.NewI2C(TFLUNA_ADDR, 1)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to initialize i2c dev: %w", err)
