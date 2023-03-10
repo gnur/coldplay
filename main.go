@@ -62,6 +62,23 @@ func (cold *coldplay) brain() {
 	}
 }
 
+func justStarted(points []Measurement) bool {
+	if len(points) < 3 {
+		//not enough data to check for movement
+		return false
+	}
+
+	n := len(points)
+	old := isMoving(points[n-2 : n-1])
+	cur := isMoving(points[n-1 : n])
+
+	if cur && !old {
+		return true
+	}
+
+	return false
+}
+
 func isMoving(points []Measurement) bool {
 	if len(points) < 2 {
 		//not enough data to check for movement
