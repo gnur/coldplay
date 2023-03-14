@@ -2,6 +2,7 @@ package main
 
 import (
 	"math"
+	"net/http"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -48,7 +49,10 @@ func main() {
 		ll:     logrus.WithField("app", "coldplay"),
 	}
 
-	cold.brain()
+	go cold.brain()
+
+	// listening on a port without anything just to make it exclusive
+	http.ListenAndServe(":10211", nil)
 }
 
 func (cold *coldplay) brain() {
@@ -63,11 +67,17 @@ func (cold *coldplay) brain() {
 		}
 
 		if isMoving(history) {
-			cold.ll.WithField("height", point.Height).Info("Writing to prometheus because we're moving")
+			cold.ll.WithFields(logrus.Fields{
+				"height":      point.Height,
+				"temperature": point.Temperature,
+			}).Info("Writing to prometheus because we're moving")
 			lastWrite = time.Now()
 			cold.writer.ch <- point
 		} else if time.Since(lastWrite) > 30*time.Second {
-			cold.ll.WithField("height", point.Height).Info("Writing to prometheus because it's been too long")
+			cold.ll.WithFields(logrus.Fields{
+				"height":      point.Height,
+				"temperature": point.Temperature,
+			}).Info("Writing to prometheus because it's been too long")
 			lastWrite = time.Now()
 			cold.writer.ch <- point
 		}

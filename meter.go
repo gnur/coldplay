@@ -9,10 +9,14 @@ import (
 )
 
 const (
-	TFLUNA_ADDR  = 0x10
+	TFLUNA_ADDR = 0x10
+
 	MODE_ADDR    = 0x23
 	TRIGGER_MODE = 0x01
-	TRIGGER_ADDR = 0x24
+
+	TRIGGER_BYTES = 0x01
+	TRIGGER_ADDR  = 0x24
+	T
 
 	GROUND_FLOOR_HEIGHT = 2.0
 	MIDDLE_FLOOR_HEIGHT = 276.5
@@ -20,7 +24,8 @@ const (
 
 	OFFSET = 544.3
 
-	SAMPLES = 40
+	SAMPLES  = 20
+	MAX_TEMP = 33
 )
 
 type meter struct {
@@ -42,6 +47,11 @@ func NewMeter() (*meter, error) {
 	}
 	logger.ChangePackageLogLevel("i2c", logger.InfoLevel)
 
+	err = m.dev.WriteRegU8(MODE_ADDR, TRIGGER_MODE)
+	if err != nil {
+		return nil, fmt.Errorf("Failed to setup trigger mode: %w", err)
+	}
+
 	_, _, err = m.measure()
 	if err != nil {
 		return nil, fmt.Errorf("Failed to do init measure: %w", err)
@@ -61,7 +71,7 @@ func (m *meter) measureLoop() {
 		samples := 0
 
 		for i := 0; i < m.samples; i++ {
-			time.Sleep(9 * time.Millisecond)
+			time.Sleep(18 * time.Millisecond)
 			d, t, err := m.measure()
 			if err != nil {
 				continue
@@ -84,12 +94,18 @@ func (m *meter) measureLoop() {
 			Height:      OFFSET - distance,
 			Timestamp:   time.Now(),
 		}
+
+		//safeguard to prevent heating up if it is over 33 degrees
+		if temp > 3300 {
+			fmt.Println("Sleeping for a while to prevent overheating")
+			time.Sleep(20 * time.Second)
+		}
 	}
 }
 
 func (m *meter) measure() (uint, uint, error) {
 
-	err := m.dev.WriteRegU8(TRIGGER_ADDR, TRIGGER_MODE)
+	err := m.dev.WriteRegU8(TRIGGER_ADDR, TRIGGER_BYTES)
 	if err != nil {
 		return 0, 0, fmt.Errorf("Failed to write: %w", err)
 	}
