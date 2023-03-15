@@ -71,7 +71,7 @@ func (m *meter) measureLoop() {
 		samples := 0
 
 		for i := 0; i < m.samples; i++ {
-			time.Sleep(18 * time.Millisecond)
+			time.Sleep(25 * time.Millisecond)
 			d, t, err := m.measure()
 			if err != nil {
 				continue
@@ -83,6 +83,7 @@ func (m *meter) measureLoop() {
 
 		if samples != m.samples {
 			//TODO: add warning
+			fmt.Println("Samples were dropped, skipping")
 			continue
 		}
 
@@ -109,7 +110,7 @@ func (m *meter) measure() (uint, uint, error) {
 	if err != nil {
 		return 0, 0, fmt.Errorf("Failed to write: %w", err)
 	}
-	time.Sleep(5 * time.Millisecond)
+	time.Sleep(10 * time.Millisecond)
 
 	buf, total, err := m.dev.ReadRegBytes(0x00, 6)
 	if err != nil {
