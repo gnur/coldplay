@@ -7,6 +7,7 @@ require (
 	github.com/d2r2/go-i2c v0.0.0-20191123181816-73a8a799d6bc
 	github.com/d2r2/go-logger v0.0.0-20210606094344-60e9d1233e22
 	github.com/faiface/beep v1.1.0
+	github.com/r3labs/sse/v2 v2.10.0
 	github.com/sirupsen/logrus v1.8.1
 )
 
@@ -18,7 +19,6 @@ require (
 	github.com/hajimehoshi/oto v1.0.1 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/prometheus/prometheus v0.42.0 // indirect
-	github.com/r3labs/sse/v2 v2.10.0 // indirect
 	golang.org/x/exp/shiny v0.0.0-20230224173230-c95f2b4c22f2 // indirect
 	golang.org/x/image v0.5.0 // indirect
 	golang.org/x/mobile v0.0.0-20230301163155-e0f57694e12c // indirect

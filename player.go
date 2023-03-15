@@ -12,7 +12,8 @@ import (
 )
 
 type player struct {
-	ctrl *beep.Ctrl
+	ctrl   *beep.Ctrl
+	volume *effects.Volume
 }
 
 func newPlayer() (*player, error) {
@@ -45,8 +46,18 @@ func newPlayer() (*player, error) {
 	speaker.Play(volume)
 
 	return &player{
-		ctrl: ctrl,
+		ctrl:   ctrl,
+		volume: volume,
 	}, nil
+}
+
+func (p *player) setVolume(f float64) {
+	if f > 3 || f < 0 {
+		return
+	}
+	speaker.Lock()
+	p.volume.Volume = f
+	speaker.Unlock()
 }
 
 func (p *player) start() {

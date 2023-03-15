@@ -153,6 +153,11 @@ func (cold *coldplay) brain() {
 			cold.writer.ch <- point
 		}
 
+		if isMoving(history) {
+			vol := 3 - (3 * point.Height / TOP_FLOOR_HEIGHT)
+			cold.player.setVolume(vol)
+		}
+
 		if justChangedMovement(history) {
 			cold.ll.Info("movement changed")
 
