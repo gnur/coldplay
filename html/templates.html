@@ -1,0 +1,46 @@
+{{define "index.html"}}
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>coldplay</title>
+    <link rel="stylesheet" href="/bulma.min.css">
+    <script src="/htmx.min.js"></script>
+    <script src="/sse.js"></script>
+  </head>
+  <body>
+  <section class="section">
+    <div class="container">
+      <h1 class="title">
+        Project Coldplay
+      </h1>
+
+      <nav class="level" hx-ext="sse" sse-connect="/events?stream=measurements">
+      {{template "height" .}}
+      </nav>
+
+    </div>
+  </section>
+  </body>
+</html>
+{{end}}
+
+{{define "height" -}}
+  <div class="level-item has-text-centered" sse-swap="message">
+    <div class="px-5">
+      <p class="heading">Height</p>
+      <p class="title">
+        <progress class="progress" value="{{.Height}}" max="550">{{.Height}}%</progress><br>
+{{floatDecimal .Height}} cm
+      </p>
+    </div>
+    <div>
+      <p class="heading">Temp</p>
+      <p class="title">
+        <progress class="progress is-danger" value="{{.Temp}}" max="50">{{.Temp}}%</progress><br>
+{{floatDecimal .Temp}}°
+      </p>
+    </div>
+  </div>
+{{end}}

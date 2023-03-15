@@ -18,8 +18,11 @@ require (
 	github.com/hajimehoshi/oto v1.0.1 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/prometheus/prometheus v0.42.0 // indirect
+	github.com/r3labs/sse/v2 v2.10.0 // indirect
 	golang.org/x/exp/shiny v0.0.0-20230224173230-c95f2b4c22f2 // indirect
 	golang.org/x/image v0.5.0 // indirect
 	golang.org/x/mobile v0.0.0-20230301163155-e0f57694e12c // indirect
+	golang.org/x/net v0.5.0 // indirect
 	golang.org/x/sys v0.5.0 // indirect
+	gopkg.in/cenkalti/backoff.v1 v1.1.0 // indirect
 )

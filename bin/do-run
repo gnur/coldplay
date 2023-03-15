@@ -10,7 +10,7 @@ function log {
 function finish {
 
   log "Starting systemd coldplay"
-  sudo systemctl start coldplay
+  #sudo systemctl start coldplay
 }
 trap finish EXIT
 

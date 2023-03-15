@@ -1,12 +1,34 @@
 package main
 
 import (
+	"bytes"
+	_ "embed"
+	"html/template"
 	"math"
 	"net/http"
+	"strings"
 	"time"
 
+	"github.com/r3labs/sse/v2"
 	"github.com/sirupsen/logrus"
 )
+
+type V struct {
+	Height float64
+	Temp   float64
+}
+
+//go:embed html/sse.js
+var ssejs []byte
+
+//go:embed html/htmx.min.js
+var htmxminjs []byte
+
+//go:embed html/bulma.min.css
+var bulmamincss []byte
+
+//go:embed html/templates.html
+var templates string
 
 type Measurement struct {
 	Height      float64
@@ -19,11 +41,20 @@ type coldplay struct {
 	writer *writer
 	player *player
 	ll     *logrus.Entry
+	sse    *sse.Server
+	tpl    *template.Template
 }
 
 func main() {
 
 	logrus.Info("Starting")
+
+	tpl := template.New("")
+	tpl.Funcs(templateFunctions)
+	tpl, err := tpl.Parse(strings.Replace(templates, "\n", "", -1))
+	if err != nil {
+		logrus.WithError(err).Fatal("could not parse templates")
+	}
 
 	m, err := NewMeter()
 	if err != nil {
@@ -42,17 +73,47 @@ func main() {
 	}
 	logrus.Info("Player loaded, starting")
 
+	server := sse.New()
+	server.CreateStream("measurements")
+	server.CreateStream("writes")
+	server.CreateStream("playerupdates")
+
 	cold := coldplay{
 		meter:  m,
 		writer: w,
 		player: p,
 		ll:     logrus.WithField("app", "coldplay"),
+		sse:    server,
+		tpl:    tpl,
 	}
 
 	go cold.brain()
 
-	// listening on a port without anything just to make it exclusive
-	http.ListenAndServe(":10211", nil)
+	// Create a new Mux and set the handler
+	mux := http.NewServeMux()
+	mux.HandleFunc("/events", server.ServeHTTP)
+	mux.HandleFunc("/sse.js", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Add("Content-Type", "text/javascript")
+		w.Write(ssejs)
+	})
+	mux.HandleFunc("/htmx.min.js", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Add("Content-Type", "text/javascript")
+		w.Write(htmxminjs)
+	})
+	mux.HandleFunc("/bulma.min.css", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Add("Content-Type", "text/css")
+		w.Write(bulmamincss)
+	})
+
+	mux.HandleFunc("/index.html", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Add("Content-Type", "text/html")
+		tpl.ExecuteTemplate(w, "index.html", V{
+			Height: 0,
+			Temp:   0,
+		})
+	})
+
+	http.ListenAndServe(":10211", mux)
 }
 
 func (cold *coldplay) brain() {
@@ -60,6 +121,16 @@ func (cold *coldplay) brain() {
 	lastWrite := time.Now().Add(-5 * time.Minute)
 
 	for point := range cold.meter.ch {
+
+		var b bytes.Buffer
+		cold.tpl.ExecuteTemplate(&b, "height", V{
+			Height: point.Height,
+			Temp:   point.Temperature,
+		})
+
+		cold.sse.Publish("measurements", &sse.Event{
+			Data: b.Bytes(),
+		})
 		history = append(history, point)
 
 		if len(history) > 10 {
