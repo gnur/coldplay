@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/d2r2/go-i2c"
@@ -14,9 +15,11 @@ const (
 	MODE_ADDR    = 0x23
 	TRIGGER_MODE = 0x01
 
+	RESET_ADDR  = 0x21
+	RESET_BYTES = 0x02
+
 	TRIGGER_BYTES = 0x01
 	TRIGGER_ADDR  = 0x24
-	T
 
 	GROUND_FLOOR_HEIGHT = 2.0
 	MIDDLE_FLOOR_HEIGHT = 276.5
@@ -29,6 +32,7 @@ const (
 )
 
 type meter struct {
+	sync.Mutex
 	samples int
 	dev     *i2c.I2C
 	ch      chan Measurement
@@ -47,10 +51,8 @@ func NewMeter() (*meter, error) {
 	}
 	logger.ChangePackageLogLevel("i2c", logger.InfoLevel)
 
-	err = m.dev.WriteRegU8(MODE_ADDR, TRIGGER_MODE)
-	if err != nil {
-		return nil, fmt.Errorf("Failed to setup trigger mode: %w", err)
-	}
+	// reset will make sure we start with a clean slate
+	m.reset()
 
 	_, _, err = m.measure()
 	if err != nil {
@@ -106,13 +108,17 @@ func (m *meter) measureLoop() {
 
 func (m *meter) measure() (uint, uint, error) {
 
+	m.Lock()
 	err := m.dev.WriteRegU8(TRIGGER_ADDR, TRIGGER_BYTES)
+	m.Unlock()
 	if err != nil {
 		return 0, 0, fmt.Errorf("Failed to write: %w", err)
 	}
 	time.Sleep(10 * time.Millisecond)
 
+	m.Lock()
 	buf, total, err := m.dev.ReadRegBytes(0x00, 6)
+	m.Unlock()
 	if err != nil {
 		return 0, 0, fmt.Errorf("Failed to read: %w", err)
 	}
@@ -124,4 +130,24 @@ func (m *meter) measure() (uint, uint, error) {
 	temp := 256*uint(buf[5]) + uint(buf[4])
 
 	return distance, temp, nil
+}
+
+func (m *meter) reset() error {
+
+	// first reset the device
+	m.Lock()
+	err := m.dev.WriteRegU8(RESET_ADDR, RESET_BYTES)
+	m.Unlock()
+	if err != nil {
+		return fmt.Errorf("Failed to setup trigger mode: %w", err)
+	}
+
+	//then make sure we set it up in trigger mode again
+	m.Lock()
+	err = m.dev.WriteRegU8(MODE_ADDR, TRIGGER_MODE)
+	m.Unlock()
+	if err != nil {
+		return fmt.Errorf("Failed to setup trigger mode: %w", err)
+	}
+	return nil
 }

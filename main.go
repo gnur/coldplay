@@ -74,6 +74,7 @@ func main() {
 	logrus.Info("Player loaded, starting")
 
 	server := sse.New()
+	server.AutoReplay = false
 	server.CreateStream("measurements")
 	server.CreateStream("writes")
 	server.CreateStream("playerupdates")
@@ -174,6 +175,11 @@ func (cold *coldplay) brain() {
 				}
 			}
 		}
+
+		if isStale(history) {
+			cold.ll.Error("Resetting device because measurements have become stale")
+			cold.meter.reset()
+		}
 	}
 }
 
@@ -193,7 +199,6 @@ func isBetweenFloors(points []Measurement) bool {
 	}
 
 	return true
-
 }
 
 func justChangedMovement(points []Measurement) bool {
@@ -232,4 +237,21 @@ func isMoving(points []Measurement) bool {
 	}
 
 	return false
+}
+
+func isStale(points []Measurement) bool {
+	if len(points) < 5 {
+		//not enough data to check for movement
+		return false
+	}
+
+	last := points[0].Height
+	for _, p := range points {
+		if last != p.Height {
+			//any change is okay to prevent staleness
+			return false
+		}
+	}
+
+	return true
 }
