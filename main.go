@@ -42,7 +42,7 @@ type Measurement struct {
 	Timestamp   time.Time
 }
 
-type coldplay struct {
+type scientist struct {
 	meter  *meter
 	writer *writer
 	player *player
@@ -85,7 +85,7 @@ func main() {
 	server.CreateStream("writes")
 	server.CreateStream("playerupdates")
 
-	cold := coldplay{
+	cold := scientist{
 		meter:  m,
 		writer: w,
 		player: p,
@@ -123,19 +123,19 @@ func main() {
 	http.ListenAndServe(":10211", mux)
 }
 
-func (cold *coldplay) brain() {
+func (science *scientist) brain() {
 	history := []Measurement{}
 	lastWrite := time.Now().Add(-5 * time.Minute)
 
-	for point := range cold.meter.ch {
+	for point := range science.meter.ch {
 
 		var b bytes.Buffer
-		cold.tpl.ExecuteTemplate(&b, "height", V{
+		science.tpl.ExecuteTemplate(&b, "height", V{
 			Height: point.Height,
 			Temp:   point.Temperature,
 		})
 
-		cold.sse.Publish("measurements", &sse.Event{
+		science.sse.Publish("measurements", &sse.Event{
 			Data: b.Bytes(),
 		})
 		history = append(history, point)
@@ -145,39 +145,39 @@ func (cold *coldplay) brain() {
 		}
 
 		if isMoving(history) {
-			cold.ll.WithFields(logrus.Fields{
+			science.ll.WithFields(logrus.Fields{
 				"height":      point.Height,
 				"temperature": point.Temperature,
 			}).Info("Writing to prometheus because we're moving")
 			lastWrite = time.Now()
-			cold.writer.ch <- point
-		} else if time.Since(lastWrite) > 30*time.Second {
-			cold.ll.WithFields(logrus.Fields{
+			science.writer.ch <- point
+		} else if time.Since(lastWrite) > 10*time.Second {
+			science.ll.WithFields(logrus.Fields{
 				"height":      point.Height,
 				"temperature": point.Temperature,
 			}).Info("Writing to prometheus because it's been too long")
 			lastWrite = time.Now()
-			cold.writer.ch <- point
+			science.writer.ch <- point
 		}
 
 		if isMoving(history) {
 			vol := 3 - (3 * point.Height / TOP_FLOOR_HEIGHT)
-			cold.player.setVolume(vol)
+			science.player.setVolume(vol)
 		}
 
 		if justChangedMovement(history) {
-			cold.ll.Info("movement changed")
+			science.ll.Info("movement changed")
 
 			if isMoving(history) {
-				cold.ll.Info("Starting music")
-				cold.player.start()
+				science.ll.Info("Starting music")
+				science.player.start()
 			} else {
 
 				if !isBetweenFloors(history) {
-					cold.ll.Info("stopping music")
-					cold.player.stop()
+					science.ll.Info("stopping music")
+					science.player.stop()
 				} else {
-					cold.ll.Info("not stopping music because we're between floors")
+					science.ll.Info("not stopping music because we're between floors")
 				}
 			}
 		}
