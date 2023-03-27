@@ -15,7 +15,7 @@ import (
 
 const (
 	GROUND_FLOOR_HEIGHT = 2.0
-	MIDDLE_FLOOR_HEIGHT = 276.5
+	MIDDLE_FLOOR_HEIGHT = 278.5
 	TOP_FLOOR_HEIGHT    = 544
 )
 
@@ -188,15 +188,15 @@ func (science *scientist) brain() {
 func isBetweenFloors(points []Measurement) bool {
 	cur := points[len(points)-1].Height
 
-	if math.Abs(cur-GROUND_FLOOR_HEIGHT) < 5 {
+	if math.Abs(cur-GROUND_FLOOR_HEIGHT) < 6 {
 		return false
 	}
 
-	if math.Abs(cur-MIDDLE_FLOOR_HEIGHT) < 5 {
+	if math.Abs(cur-MIDDLE_FLOOR_HEIGHT) < 6 {
 		return false
 	}
 
-	if math.Abs(cur-TOP_FLOOR_HEIGHT) < 5 {
+	if math.Abs(cur-TOP_FLOOR_HEIGHT) < 6 {
 		return false
 	}
 

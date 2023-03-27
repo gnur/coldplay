@@ -39,7 +39,6 @@ func NewMeter() (*meter, error) {
 			return
 		}
 
-		fmt.Printf("Received a measurement\nheight: %f\ntemperature: %f\n", point.Height, point.Temperature)
 		logrus.WithFields(logrus.Fields{
 			"height":      point.Height,
 			"temperature": point.Temperature,
