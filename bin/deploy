@@ -1,10 +1,31 @@
 #!/bin/bash
+#
+function log {
+  echo "$(hostname): $(date +%T)> $*"
+}
 
-sudo systemctl stop coldplay
+sudo systemctl stop yellow paradise
 
 
-go build -o coldplay .
-sudo cp coldplay /usr/local/bin/coldplay 
+log "building yellow (go)"
+go build -o yellow .
 
-sudo systemctl start coldplay
-sudo journalctl -u coldplay -f
+log "building paradise (rust)"
+cargo build --release
+
+log "copying binaries"
+sudo cp yellow /usr/local/bin/yellow 
+sudo cp target/release/paradise /usr/local/bin/paradise 
+
+sudo cp systemd/* /etc/systemd/system/
+sudo systemctl daemon-reload
+
+
+log "starting systemd yellow and waiting 10s for it to load the mp3"
+sudo systemctl start yellow
+# starting yellow first, because it takes a while for it to load and I want to see the first measurement
+sleep 10
+log "starting systemd paradise"
+sudo systemctl start yellow paradise
+
+sudo journalctl -u yellow -u paradise -f

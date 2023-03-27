@@ -13,6 +13,12 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+const (
+	GROUND_FLOOR_HEIGHT = 2.0
+	MIDDLE_FLOOR_HEIGHT = 276.5
+	TOP_FLOOR_HEIGHT    = 544
+)
+
 type V struct {
 	Height float64
 	Temp   float64
@@ -176,10 +182,6 @@ func (cold *coldplay) brain() {
 			}
 		}
 
-		if isStale(history) {
-			cold.ll.Error("Resetting device because measurements have become stale")
-			cold.meter.reset()
-		}
 	}
 }
 
@@ -237,21 +239,4 @@ func isMoving(points []Measurement) bool {
 	}
 
 	return false
-}
-
-func isStale(points []Measurement) bool {
-	if len(points) < 5 {
-		//not enough data to check for movement
-		return false
-	}
-
-	last := points[0].Height
-	for _, p := range points {
-		if last != p.Height {
-			//any change is okay to prevent staleness
-			return false
-		}
-	}
-
-	return true
 }

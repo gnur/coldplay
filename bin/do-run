@@ -9,18 +9,18 @@ function log {
 
 function finish {
 
-  log "Starting systemd coldplay"
-  #sudo systemctl start coldplay
+  log "Starting systemd yellow"
+  #sudo systemctl start yellow
 }
 trap finish EXIT
 
 cd /home/erwin/code/coldplay
 
 log "Building binary"
-go build -o coldplay .
+go build -o yellow .
 
-log "Stopping systemd coldplaying"
-sudo systemctl stop coldplay
+log "Stopping systemd yellow"
+sudo systemctl stop yellow
 
 log "Running binary"
-/home/erwin/code/coldplay/coldplay
+/home/erwin/code/coldplay/yellow
