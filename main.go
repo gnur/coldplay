@@ -173,9 +173,10 @@ func (science *scientist) brain() {
 				science.player.start()
 			} else {
 
-				if !isBetweenFloors(history) {
-					science.ll.Info("stopping music")
+				if at, floor := isAtFloor(history); at {
+					science.ll.WithField("floor", floor).Info("stopping music and playing floor announcement")
 					science.player.stop()
+					science.player.playAnnouncement(floor)
 				} else {
 					science.ll.Info("not stopping music because we're between floors")
 				}
@@ -185,22 +186,22 @@ func (science *scientist) brain() {
 	}
 }
 
-func isBetweenFloors(points []Measurement) bool {
+func isAtFloor(points []Measurement) (bool, int) {
 	cur := points[len(points)-1].Height
 
 	if math.Abs(cur-GROUND_FLOOR_HEIGHT) < 6 {
-		return false
+		return true, 0
 	}
 
 	if math.Abs(cur-MIDDLE_FLOOR_HEIGHT) < 6 {
-		return false
+		return true, 1
 	}
 
 	if math.Abs(cur-TOP_FLOOR_HEIGHT) < 6 {
-		return false
+		return true, 2
 	}
 
-	return true
+	return false, -1
 }
 
 func justChangedMovement(points []Measurement) bool {

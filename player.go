@@ -13,7 +13,9 @@ import (
 
 type player struct {
 	ctrl   *beep.Ctrl
-	volume *effects.Volume
+	volume float64
+	music  *effects.Volume
+	floors []*effects.Volume
 }
 
 func newPlayer() (*player, error) {
@@ -22,10 +24,10 @@ func newPlayer() (*player, error) {
 
 		return nil, fmt.Errorf("Could not open mp3: %w", err)
 	}
+	defer f.Close()
 
 	streamer, format, err := mp3.Decode(f)
 	defer streamer.Close()
-
 	if err != nil {
 		return nil, fmt.Errorf("Could not decode mp3: %w", err)
 	}
@@ -36,27 +38,61 @@ func newPlayer() (*player, error) {
 
 	ctrl := &beep.Ctrl{Streamer: beep.Loop(-1, buffer.Streamer(0, buffer.Len())), Paused: true}
 
-	volume := &effects.Volume{
+	musicLoop := &effects.Volume{
 		Streamer: ctrl,
 		Base:     2,
 		Volume:   3,
 		Silent:   false,
 	}
 
-	speaker.Play(volume)
+	speaker.Play(musicLoop)
+
+	var floors []*effects.Volume
+
+	for i := 0; i <= 2; i++ {
+		f, err := os.Open(fmt.Sprintf("/home/erwin/etage%v.mp3", i))
+		if err != nil {
+			return nil, fmt.Errorf("Could not open mp3: %w", err)
+		}
+		defer f.Close()
+
+		streamer, _, err := mp3.Decode(f)
+		if err != nil {
+			return nil, fmt.Errorf("Could not decode mp3: %w", err)
+		}
+		defer streamer.Close()
+
+		buffer := beep.NewBuffer(format)
+		buffer.Append(streamer)
+
+		ctrl := &beep.Ctrl{Streamer: buffer.Streamer(0, buffer.Len()), Paused: false}
+		floors = append(floors, &effects.Volume{
+			Streamer: ctrl,
+			Base:     2,
+			Volume:   3,
+			Silent:   false,
+		})
+	}
 
 	return &player{
 		ctrl:   ctrl,
-		volume: volume,
+		music:  musicLoop,
+		floors: floors,
 	}, nil
+}
+
+func (p *player) playAnnouncement(floor int) {
+	p.floors[floor].Volume = p.volume + 2
+	speaker.Play(p.floors[floor])
 }
 
 func (p *player) setVolume(f float64) {
 	if f > 3 || f < 0 {
 		return
 	}
+	p.volume = f
 	speaker.Lock()
-	p.volume.Volume = f
+	p.music.Volume = f
 	speaker.Unlock()
 }
 
