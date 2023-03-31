@@ -15,7 +15,7 @@ type player struct {
 	ctrl   *beep.Ctrl
 	volume float64
 	music  *effects.Volume
-	floors []*effects.Volume
+	floors []*beep.Buffer
 }
 
 func newPlayer() (*player, error) {
@@ -47,7 +47,7 @@ func newPlayer() (*player, error) {
 
 	speaker.Play(musicLoop)
 
-	var floors []*effects.Volume
+	var floors []*beep.Buffer
 
 	for i := 0; i <= 2; i++ {
 		f, err := os.Open(fmt.Sprintf("/home/erwin/etage%v.mp3", i))
@@ -60,18 +60,13 @@ func newPlayer() (*player, error) {
 		if err != nil {
 			return nil, fmt.Errorf("Could not decode mp3: %w", err)
 		}
-		defer streamer.Close()
 
 		buffer := beep.NewBuffer(format)
 		buffer.Append(streamer)
+		streamer.Close()
 
-		ctrl := &beep.Ctrl{Streamer: buffer.Streamer(0, buffer.Len()), Paused: false}
-		floors = append(floors, &effects.Volume{
-			Streamer: ctrl,
-			Base:     2,
-			Volume:   3,
-			Silent:   false,
-		})
+		floors = append(floors, buffer)
+
 	}
 
 	return &player{
@@ -82,8 +77,14 @@ func newPlayer() (*player, error) {
 }
 
 func (p *player) playAnnouncement(floor int) {
-	p.floors[floor].Volume = p.volume + 2
-	speaker.Play(p.floors[floor])
+	announcement := effects.Volume{
+		Streamer: p.floors[floor].Streamer(0, p.floors[floor].Len()),
+		Base:     2,
+		Volume:   p.volume + 2,
+		Silent:   false,
+	}
+	speaker.Play(&announcement)
+
 }
 
 func (p *player) setVolume(f float64) {
