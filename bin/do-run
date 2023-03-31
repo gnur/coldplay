@@ -1,0 +1,26 @@
+#!/bin/bash
+
+export PATH=/home/erwin/go/bin:/home/erwin/.cargo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/local/games:/usr/games
+
+
+function log {
+  echo "$(hostname): $(date +%T)> $*"
+}
+
+function finish {
+
+  log "Starting systemd yellow"
+  #sudo systemctl start yellow
+}
+trap finish EXIT
+
+cd /home/erwin/code/coldplay
+
+log "Building binary"
+go build -o yellow .
+
+log "Stopping systemd yellow"
+sudo systemctl stop yellow
+
+log "Running binary"
+/home/erwin/code/coldplay/yellow

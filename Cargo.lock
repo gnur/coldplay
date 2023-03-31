@@ -116,17 +116,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "baf1de4339761588bc0619e3cbc0120ee582ebb74b53b4efbf79117bd2da40fd"
 
 [[package]]
-name = "coldplay"
-version = "0.1.0"
-dependencies = [
- "i2cdev",
- "nats",
- "serde",
- "serde_json",
- "time",
-]
-
-[[package]]
 name = "concurrent-queue"
 version = "2.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -513,6 +502,17 @@ name = "openssl-probe"
 version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ff011a302c396a5197692431fc1948019154afc178baf7d8e37367442a4601cf"
+
+[[package]]
+name = "paradise"
+version = "0.1.0"
+dependencies = [
+ "i2cdev",
+ "nats",
+ "serde",
+ "serde_json",
+ "time",
+]
 
 [[package]]
 name = "parking"
