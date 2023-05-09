@@ -45,6 +45,22 @@ func (w *writer) remoteWriter() {
 					Labels: []promwrite.Label{
 						{
 							Name:  "__name__",
+							Value: "reads_without_fault",
+						},
+						{
+							Name:  "service",
+							Value: "paradise",
+						},
+					},
+					Sample: promwrite.Sample{
+						Time:  point.Timestamp,
+						Value: float64(point.ReadsWithoutFault),
+					},
+				},
+				{
+					Labels: []promwrite.Label{
+						{
+							Name:  "__name__",
 							Value: "object_height",
 						},
 						{

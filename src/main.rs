@@ -13,12 +13,16 @@ const TRIGGER_MODE: [u8; 1] = [0x01];
 
 const TRIGGER_ADDR: u8 = 0x24;
 
-const SAMPLES: u8 = 25;
+const RESET_ADDR: u8 = 0x21;
+const RESET_VAL: [u8; 1] = [0x02];
+
+const SAMPLES: u16 = 500;
 
 #[derive(Serialize, Deserialize, Debug)]
 struct Measerement {
     height: f64,
     temperature: f64,
+    readsWithoutFault: u64,
 
     #[serde(with = "time::serde::rfc3339")]
     pub timestamp: time::OffsetDateTime,
@@ -33,23 +37,22 @@ fn i2cfun() -> Result<(), LinuxI2CError> {
     //set up the TF Luna to only measure when asked for enhanced accuracy
     dev.smbus_write_block_data(MODE_ADDR, &TRIGGER_MODE)?;
 
-    let mut last_measurement = -100.0;
-    let mut sleeptime = Duration::from_millis(20);
-
-    //making this 2 so it will always publish at the start
-    let mut moves = 2;
+    let sleeptime = Duration::from_millis(30);
+    let mut lastresult: f64 = 0.0;
+    let mut reads_without_fault: u64 = 0;
 
     loop {
         let mut sum: f64 = 0.0;
         let mut temperature_sum: f64 = 0.0;
         let mut reads = 0;
+
         //do SAMPLES measurements
         for _ in 0..SAMPLES {
             thread::sleep(sleeptime);
 
             dev.smbus_write_block_data(TRIGGER_ADDR, &TRIGGER_MODE)?;
 
-            thread::sleep(sleeptime);
+            thread::sleep(Duration::from_millis(15));
 
             let read = dev.smbus_read_i2c_block_data(0x00, 0x06);
             match read {
@@ -76,74 +79,38 @@ fn i2cfun() -> Result<(), LinuxI2CError> {
         let temperature_average: f64 = temperature_sum / reads as f64;
 
         //average of last SAMPLES reads
-        let mut avg: f64 = 545.0 - (sum / reads as f64);
-
-        if last_measurement == -100.0 {
-            last_measurement = avg;
-        }
-
-        avg = (avg * 2.0 + last_measurement) / 3.0;
-        //flip measurements upside down to let them make a bit more sense and take a moving average
-
-        let diff = avg - last_measurement;
+        let avg: f64 = sum / reads as f64;
 
         //elevator max observed speed is about +- 5 at this point in the script
-        if diff.abs() > 15.0 {
-            println!("Skipping because init: {diff}");
-            last_measurement = avg;
-            //this should only happen on boot, skip processing until measurements are stable
-            continue;
+        let p = Measerement {
+            height: avg,
+            readsWithoutFault: reads_without_fault,
+            temperature: temperature_average,
+            timestamp: time::OffsetDateTime::now_utc(),
+        };
+        let p = serde_json::to_string(&p).unwrap();
+        let res = nc.publish("coldplay.measurement", p);
+        match res {
+            Ok(()) => {}
+            Err(e) => println!("Publishing to NATS failed: {e}"),
         }
-
-        //check if within +- 1 cm of ground floor: 2.5
-        //check if within +- 1 cm of middle floor: 276.6
-        //check if within +- 1 cm of top floor: 544
-
-        if diff.abs() > 1.0 {
-            moves = 3;
-            println!("We're moving!");
-            //push to nats
-            sleeptime = Duration::from_millis(10);
-
-            let p = Measerement {
-                height: avg,
-                temperature: temperature_average,
-                timestamp: time::OffsetDateTime::now_utc(),
-            };
-            let p = serde_json::to_string(&p).unwrap();
-            let res = nc.publish("coldplay.measurement", p);
-            match res {
-                Ok(()) => {}
-                Err(e) => println!("Publishing to NATS failed: {e}"),
-            }
-        } else {
-            sleeptime = Duration::from_millis(20);
-            moves -= 1;
-
-            if moves == 0 {
-                println!("We've stopped moving");
-            }
-            if moves == -30 || moves > 0 {
-                println!("Publishing static state");
-                moves = 0;
-                //also trigger
-                let p = Measerement {
-                    height: avg,
-                    temperature: temperature_average,
-                    timestamp: time::OffsetDateTime::now_utc(),
-                };
-                let p = serde_json::to_string(&p).unwrap();
-                let res = nc.publish("coldplay.measurement", p);
-                match res {
-                    Ok(()) => {}
-                    Err(e) => println!("Publishing to NATS failed: {e}"),
-                }
-            }
-        }
-
-        last_measurement = avg;
 
         println!("avg={avg}");
+
+        if lastresult == avg {
+            //exactly same result, seems suspicous, lets take a break
+
+            nc.publish("paradise.reset", "triggering reset")?;
+
+            thread::sleep(Duration::from_secs_f64(5.0));
+
+            dev.smbus_write_block_data(RESET_ADDR, &RESET_VAL)?;
+
+            thread::sleep(Duration::from_secs_f64(15.0));
+            reads_without_fault = 0;
+        }
+        reads_without_fault += 1;
+        lastresult = avg;
     }
 }
 

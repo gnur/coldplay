@@ -40,8 +40,9 @@ func NewMeter() (*meter, error) {
 		}
 
 		logrus.WithFields(logrus.Fields{
-			"height":      point.Height,
-			"temperature": point.Temperature,
+			"height":            point.Height,
+			"temperature":       point.Temperature,
+			"readsWithoutFault": point.ReadsWithoutFault,
 		}).Info("Got measurement")
 		point.Timestamp = point.Timestamp.In(loc)
 		met.ch <- point
