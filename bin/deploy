@@ -4,18 +4,14 @@ function log {
   echo "$(hostname): $(date +%T)> $*"
 }
 
-sudo systemctl stop yellow paradise
+sudo systemctl stop yellow
 
 
 log "building yellow (go)"
 go build -o yellow .
 
-log "building paradise (rust)"
-cargo build --release
-
 log "copying binaries"
 sudo cp yellow /usr/local/bin/yellow 
-sudo cp target/release/paradise /usr/local/bin/paradise 
 
 sudo cp systemd/* /etc/systemd/system/
 sudo systemctl daemon-reload
@@ -24,7 +20,4 @@ sudo systemctl daemon-reload
 log "starting systemd yellow"
 sudo systemctl start yellow
 
-log "starting systemd paradise"
-sudo systemctl start yellow paradise
-
-sudo journalctl -u yellow -u paradise -f
+sudo journalctl -u yellow -f

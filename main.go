@@ -2,12 +2,15 @@ package main
 
 import (
 	"bytes"
+	"context"
 	_ "embed"
+	"fmt"
 	"html/template"
 	"net/http"
 	"strings"
 	"time"
 
+	influxdb2 "github.com/influxdata/influxdb-client-go/v2"
 	"github.com/r3labs/sse/v2"
 	"github.com/sirupsen/logrus"
 )
@@ -30,10 +33,10 @@ var bulmamincss []byte
 var templates string
 
 type Measurement struct {
-	Height            float64
-	Temperature       float64
-	ReadsWithoutFault uint64
-	Timestamp         time.Time
+	Height      float64
+	Temperature float64
+	Strength    float64
+	Timestamp   time.Time
 }
 
 type scientist struct {
@@ -111,7 +114,8 @@ func main() {
 }
 
 func (science *scientist) brain() {
-	history := []Measurement{}
+
+	counter := 0
 
 	for point := range science.meter.ch {
 
@@ -127,13 +131,39 @@ func (science *scientist) brain() {
 		science.sse.Publish("measurements", &sse.Event{
 			Data: b.Bytes(),
 		})
-		history = append(history, point)
-
-		if len(history) > 10 {
-			history = history[1:]
-		}
 
 		science.writer.ch <- point
 
+		err := influxWrite(context.Background(), point.Height)
+		if err != nil {
+			fmt.Println(err)
+		}
+
+		counter++
+		if counter%10 == 0 {
+			fmt.Println("Processed another 10 measurements")
+		}
+
 	}
+}
+
+func influxWrite(ctx context.Context, h float64) error {
+	// Create write client
+	url := "http://uranus:8086"
+	token := ""
+
+	writeClient := influxdb2.NewClientWithOptions(url, token, influxdb2.DefaultOptions().SetFlushInterval(30000))
+
+	// Define write API
+	org := "gnur"
+	bucket := "Project Coldplay"
+	writeAPI := writeClient.WriteAPI(org, bucket)
+
+	point := influxdb2.NewPointWithMeasurement("coldplay").
+		AddTag("device", "elevator").
+		AddField("object_height", h)
+
+	writeAPI.WritePoint(point)
+
+	return nil
 }

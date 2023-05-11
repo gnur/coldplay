@@ -1,13 +1,12 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
+	"log"
 	"sync"
 	"time"
 
-	"github.com/nats-io/nats.go"
-	"github.com/sirupsen/logrus"
+	"go.bug.st/serial"
 )
 
 type meter struct {
@@ -21,9 +20,25 @@ func NewMeter() (*meter, error) {
 		ch: make(chan Measurement),
 	}
 
-	nc, err := nats.Connect("uranus")
+	mode := serial.Mode{
+		BaudRate: 115200,
+	}
+	port, err := serial.Open("/dev/ttyAMA0", &mode)
 	if err != nil {
-		return nil, fmt.Errorf("Failed to connect to nats: %w", err)
+		log.Fatal(err)
+	}
+	fmt.Println("Starting read")
+
+	sample_rate_packet := []byte{0x5A, 0x06, 0x03, 0x01, 0x00, 0x00}
+	_, err = port.Write(sample_rate_packet)
+	if err != nil {
+		return nil, fmt.Errorf("Unable to set sample rate: %w", err)
+	}
+
+	output_format_packet := []byte{0x5A, 0x05, 0x05, 0x06, 0x00}
+	_, err = port.Write(output_format_packet)
+	if err != nil {
+		return nil, fmt.Errorf("Unable to set output format: %w", err)
 	}
 
 	loc, err := time.LoadLocation("Local")
@@ -31,25 +46,46 @@ func NewMeter() (*meter, error) {
 		return nil, fmt.Errorf("Failed to load local timezone: %w", err)
 	}
 
-	nc.Subscribe("coldplay.measurement", func(m *nats.Msg) {
-		var point Measurement
-		err := json.Unmarshal(m.Data, &point)
-		if err != nil {
-			fmt.Println(err)
-			return
+	buff := make([]byte, 9)
+
+	var distance float64
+	var temperature float64
+	var strength float64
+	var point Measurement
+
+	go func() {
+		for {
+			n, err := port.Read(buff)
+			if err != nil {
+				return
+			}
+			if n == 0 {
+				fmt.Println("EOF")
+				break
+			}
+			if buff[0] != 0x59 || buff[1] != 0x59 {
+				//invalid signature
+				fmt.Println("invalid signature")
+				continue
+			}
+
+			distance = float64(buff[2]) + float64(buff[3])*256.0
+			distance = distance / 10 //from mm to cm
+
+			strength = float64(buff[4]) + float64(buff[5])*256.0
+
+			temperature = float64(buff[6]) + float64(buff[7])*256.0
+			temperature = temperature/8 - 256
+
+			point = Measurement{
+				Height:      distance,
+				Temperature: temperature,
+				Strength:    strength,
+				Timestamp:   time.Now().In(loc),
+			}
+			met.ch <- point
 		}
-
-		logrus.WithFields(logrus.Fields{
-			"height":            point.Height,
-			"temperature":       point.Temperature,
-			"readsWithoutFault": point.ReadsWithoutFault,
-		}).Info("Got measurement")
-		point.Timestamp = point.Timestamp.In(loc)
-		met.ch <- point
-
-	})
-	//noop for now
-	//will read nats later
+	}()
 
 	return &met, nil
 }
