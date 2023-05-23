@@ -57,6 +57,7 @@ func NewMeter() (*meter, error) {
 		for {
 			n, err := port.Read(buff)
 			if err != nil {
+				fmt.Println("Got an erro reading: ", err)
 				return
 			}
 			if n == 0 {

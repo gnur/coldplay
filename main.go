@@ -2,15 +2,15 @@ package main
 
 import (
 	"bytes"
-	"context"
 	_ "embed"
-	"fmt"
 	"html/template"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
 	influxdb2 "github.com/influxdata/influxdb-client-go/v2"
+	"github.com/influxdata/influxdb-client-go/v2/api"
 	"github.com/r3labs/sse/v2"
 	"github.com/sirupsen/logrus"
 )
@@ -47,6 +47,8 @@ type scientist struct {
 	tpl        *template.Template
 	lastHeight float64
 	lastTemp   float64
+	fluxClient influxdb2.Client
+	writeAPI   api.WriteAPI
 }
 
 func main() {
@@ -73,8 +75,6 @@ func main() {
 	server := sse.New()
 	server.AutoReplay = false
 	server.CreateStream("measurements")
-	server.CreateStream("writes")
-	server.CreateStream("playerupdates")
 
 	cold := scientist{
 		meter:  m,
@@ -84,6 +84,9 @@ func main() {
 		tpl:    tpl,
 	}
 
+	cold.setupFlux()
+
+	cold.ll.Debug("Starting brain")
 	go cold.brain()
 
 	// Create a new Mux and set the handler
@@ -110,6 +113,7 @@ func main() {
 		})
 	})
 
+	cold.ll.Info("Starting http server on :10211")
 	http.ListenAndServe(":10211", mux)
 }
 
@@ -118,6 +122,7 @@ func (science *scientist) brain() {
 	counter := 0
 
 	for point := range science.meter.ch {
+		science.ll.Debug("Received point in brain loop")
 
 		science.lastHeight = point.Height
 		science.lastTemp = point.Height
@@ -132,38 +137,39 @@ func (science *scientist) brain() {
 			Data: b.Bytes(),
 		})
 
+		science.ll.Debug("Adding point to write channel")
 		science.writer.ch <- point
 
-		err := influxWrite(context.Background(), point.Height)
-		if err != nil {
-			fmt.Println(err)
-		}
+		science.writePointFlux(point.Height)
 
 		counter++
 		if counter%10 == 0 {
-			fmt.Println("Processed another 10 measurements")
+			science.ll.WithField("height", point.Height).Info("processed 10 more measurements")
 		}
 
 	}
 }
 
-func influxWrite(ctx context.Context, h float64) error {
+func (science *scientist) setupFlux() {
 	// Create write client
 	url := "http://uranus:8086"
-	token := ""
+	token := os.Getenv("INFLUX_TOKEN")
 
-	writeClient := influxdb2.NewClientWithOptions(url, token, influxdb2.DefaultOptions().SetFlushInterval(30000))
+	science.fluxClient = influxdb2.NewClientWithOptions(url, token, influxdb2.DefaultOptions().SetFlushInterval(30000))
 
 	// Define write API
 	org := "gnur"
 	bucket := "Project Coldplay"
-	writeAPI := writeClient.WriteAPI(org, bucket)
+	science.writeAPI = science.fluxClient.WriteAPI(org, bucket)
+	science.ll.Debug("created flux client")
+}
+
+func (science *scientist) writePointFlux(h float64) {
+	science.ll.Debug("Adding point to influx buffer")
 
 	point := influxdb2.NewPointWithMeasurement("coldplay").
 		AddTag("device", "elevator").
 		AddField("object_height", h)
 
-	writeAPI.WritePoint(point)
-
-	return nil
+	science.writeAPI.WritePoint(point)
 }

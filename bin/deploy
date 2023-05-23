@@ -4,20 +4,22 @@ function log {
   echo "$(hostname): $(date +%T)> $*"
 }
 
-sudo systemctl stop yellow
+ssh coldplay "sudo systemctl stop yellow"
 
 
 log "building yellow (go)"
-go build -o yellow .
+GOOS=linux GOARCH=arm go build -o yellow .
+
+upx yellow
 
 log "copying binaries"
-sudo cp yellow /usr/local/bin/yellow 
+scp yellow coldplay:/home/erwin/bin/yellow
 
-sudo cp systemd/* /etc/systemd/system/
-sudo systemctl daemon-reload
+scp systemd/yellow.service coldplay:/tmp/yellow.service
+ssh coldplay "chmod +x /home/erwin/bin/yellow; sudo cp /tmp/yellow.service /etc/systemd/system/yellow.service; sudo systemctl daemon-reload"
 
 
 log "starting systemd yellow"
-sudo systemctl start yellow
+ssh coldplay "sudo systemctl start yellow"
 
-sudo journalctl -u yellow -f
+ssh coldplay "sudo journalctl -u yellow -f"
